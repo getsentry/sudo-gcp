@@ -5,3 +5,7 @@ sudo-gcp.toml
 
 # 1Password configuration directory
 .op/
+
+# Go binary
+sudo-gcp
+sudo-gcp-macos

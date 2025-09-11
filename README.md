@@ -1,65 +1,107 @@
-***sudo-gcp is currently in alpha stages! Expect breaking changes.***
+# Sudo GCP (Go Version)
 
-# Sudo GCP
+A Go implementation of sudo-gcp that provides temporary elevated privileges for Google Cloud commands using short-lived OAuth access tokens with mTLS support.
 
-This tool enables running Google Cloud commands with temporary elevated privileges, using
-short-lived OAuth access tokens.
+## Features
 
-`sudo-gcp` securely caches access tokens using the operating system's secret-store/keychain, and
-will reuse matching non-expired tokens on subsequent calls. 
+- ✅ Service account impersonation via IAM API
+- ✅ Graceful fallback to regular authentication
+- ✅ Simple TOML configuration
+- ✅ Command execution with token environment variables
+- 🚧 mTLS support for BeyondCorp environments (framework ready)
+- 🚧 Token caching (TODO)
+- 🚧 macOS keychain integration (TODO)
 
 ## Setup
 
-1. Define a service account to be the holder of your elevated privileges
-1. Grant elevated privileges to that service account
-1. Define who should be eligible to temporarily gain those privileges
-   - We use a google group with a "role-gcp-sudo-" prefixed group name
-1. Assign those users the `roles/iam.workloadIdentityUser` role, bound to that
-   service account
-
-## Installation
-
-```sh
-cargo install sudo-gcp
-```
+1. Install Go 1.21 or later
+2. Set up Google Cloud authentication (ADC, service account key, etc.)
+3. Configure your service account and permissions
 
 ## Configuration
 
-If both environment and file configuration sources exist, environment variables take precedence
-over the configuration file.
+Create a `sudo-gcp.toml` file:
 
-
-### Configuration by File
-Configuration can be done with a `sudo-gcp.toml` file in the current
-working directory. See the [example configuration file](doc/example-config.toml) for more details.
-
-A configuration file in a different location can be provided when running `sudo-gcp` with the 
-`--config-file` option.
-
-```sh
-# create a minimal configuration file if it does not already exist
-echo > sudo-gcp.toml 'service_account = "my-terraformer@my-project.iam.gserviceaccount.com"'
-```
-
-
-### Configuration by Environment
-
-Configuration is also supported via environment variables prefixed with `SUDOGCP_`.
-
-```sh
-export SUDOGCP_SERVICE_ACCOUNT=my-terraformer@my-project.iam.gserviceaccount.com
+```toml
+service_account = "my-service-account@my-project.iam.gserviceaccount.com"
+lifetime = 3600
+scopes = [
+    "https://www.googleapis.com/auth/cloud-platform"
+]
 ```
 
 ## Usage
-After [configuration](#Configuration), wrap commands that need elevated privileges with the
-`sudo-gcp` command, similar in usage to [`sudo`](https://man7.org/linux/man-pages/man8/sudo.8.html).
 
-Examples:
-```sh
-sudo-gcp gcloud compute instances list
+```bash
+# Run a command with elevated privileges
+./sudo-gcp gcloud compute instances list
 
-terraform plan  # error: no permission to read tfstate
-sudo-gcp !!     # try again, but with necessary privileges
+# Use a different config file
+./sudo-gcp --config-file /path/to/config.toml gcloud compute instances list
 ```
 
-For complete usage details, run `sudo-gcp --help`.
+## Development Status
+
+### ✅ Implemented
+- Basic CLI structure with flag parsing
+- TOML configuration parsing with defaults
+- Service account impersonation via IAM API
+- Command execution with token environment variables
+- Graceful fallback from mTLS to regular authentication
+- Clear error messages and logging
+
+### 🚧 In Progress
+- mTLS certificate loading framework (needs certificate access implementation)
+- Error handling improvements
+
+### 📋 TODO
+- **Certificate Access**: The go-keychain library only supports generic passwords, not certificates. We need to:
+  - Use a different library (like `github.com/99designs/keyring` or direct Security framework calls)
+  - Or implement certificate loading from files with keychain integration
+- **Token Caching**: Implement secure token storage with expiration
+- **Service Account Delegation**: Add support for delegation chains
+- **Tests**: Add comprehensive test coverage
+- **Build/Release**: Add proper build and release process
+
+## mTLS Implementation Notes
+
+The current implementation has the framework for mTLS support but needs certificate access:
+
+1. **Certificate Loading**: The `loadCertificateFromKeychain()` function is a placeholder
+2. **Fallback**: The tool gracefully falls back to regular authentication when mTLS isn't available
+3. **Next Steps**: To implement mTLS, we need to:
+   - Find a library that can access macOS keychain certificates
+   - Or implement direct Security framework calls using cgo
+   - Parse the certificate and private key data
+   - Create a proper `tls.Certificate`
+
+## Dependencies
+
+- `github.com/BurntSushi/toml` - TOML configuration parsing
+- `golang.org/x/oauth2` - OAuth2 authentication
+- `google.golang.org/api` - Google Cloud APIs
+- `github.com/keybase/go-keychain` - Keychain access (currently limited to passwords)
+
+## Building
+
+```bash
+go build -o sudo-gcp .
+```
+
+## Testing
+
+```bash
+# Test configuration loading (requires GCP credentials)
+./sudo-gcp echo "test"
+
+# Test with actual GCP command (requires authentication)
+./sudo-gcp gcloud auth list
+```
+
+## Advantages over Rust Version
+
+1. **Better Delegation Support**: Using IAM API directly allows for service account delegation chains
+2. **Simpler Dependencies**: Fewer moving parts than the Rust version
+3. **GCP SDK**: First-class support from Google's Go SDKs
+4. **Easier mTLS**: Go's crypto libraries make mTLS implementation straightforward
+5. **Cross-platform**: Go's standard library handles many platform differences
